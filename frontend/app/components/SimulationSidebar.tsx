@@ -13,32 +13,41 @@ interface Props {
   onSimulate: (latencyById: Record<string, number>) => void;
 }
 
-export const BASE_LATENCY: Record<string, number> = {
-  'API Gateway': 50,
-  'Service': 120,
-  'Queue': 180,
-  'Database': 300,
-  'Cache': 80,
+interface NodeProfile {
+  base: number;
+  capacity: number;
+}
+
+const NODE_PROFILE: Record<string, NodeProfile> = {
+  'API Gateway': { base: 20,  capacity: 1500 },
+  'Service':     { base: 40,  capacity: 1000 },
+  'Queue':       { base: 70,  capacity: 800  },
+  'Database':    { base: 100, capacity: 600  },
+  'Cache':       { base: 15,  capacity: 2000 },
 };
 
-export function nodeLatency(label: string): number {
+const DEFAULT_PROFILE: NodeProfile = { base: 40, capacity: 1000 };
+
+function getProfile(label: string): NodeProfile {
   const type = label.replace(/\s+\d+$/, '');
-  return BASE_LATENCY[type] ?? 100;
+  return NODE_PROFILE[type] ?? DEFAULT_PROFILE;
+}
+
+export function computeLatency(label: string, rps: number): number {
+  const { base, capacity } = getProfile(label);
+  return Math.round(base + (rps / capacity) * 100);
 }
 
 function runSimulation(nodes: Node[], rps: number): SimulationResult {
   if (nodes.length === 0) return { bottleneck: 'N/A', avgLatencyMs: 0 };
 
-  const latencies = nodes.map((n) => ({
+  const rows = nodes.map((n) => ({
     label: String(n.data?.label ?? n.id),
-    latency: nodeLatency(String(n.data?.label ?? '')),
+    latency: computeLatency(String(n.data?.label ?? ''), rps),
   }));
 
-  const bottleneckEntry = latencies.reduce((max, cur) => cur.latency > max.latency ? cur : max);
-
-  // Scale average latency with rps: every 1000 req/s adds 10% overhead
-  const baseAvg = latencies.reduce((sum, n) => sum + n.latency, 0) / latencies.length;
-  const avgLatencyMs = Math.round(baseAvg * (1 + (rps / 1000) * 0.1));
+  const bottleneckEntry = rows.reduce((max, cur) => cur.latency > max.latency ? cur : max);
+  const avgLatencyMs = Math.round(rows.reduce((sum, r) => sum + r.latency, 0) / rows.length);
 
   return { bottleneck: bottleneckEntry.label, avgLatencyMs };
 }
@@ -46,6 +55,7 @@ function runSimulation(nodes: Node[], rps: number): SimulationResult {
 interface NodeRow {
   label: string;
   latency: number;
+  overloaded: boolean;
 }
 
 export default function SimulationSidebar({ nodes, onSimulate }: Props) {
@@ -71,17 +81,18 @@ export default function SimulationSidebar({ nodes, onSimulate }: Props) {
       <button
         onClick={() => {
           const latencyById = Object.fromEntries(
-            nodes.map((n) => [n.id, nodeLatency(String(n.data?.label ?? ''))])
+            nodes.map((n) => [n.id, computeLatency(String(n.data?.label ?? ''), rps)])
           );
           onSimulate(latencyById);
           const r = runSimulation(nodes, rps);
           setBottleneck(r.bottleneck);
           setAvgLatencyMs(r.avgLatencyMs);
           setNodeRows(
-            nodes.map((n) => ({
-              label: String(n.data?.label ?? n.id),
-              latency: nodeLatency(String(n.data?.label ?? '')),
-            }))
+            nodes.map((n) => {
+              const label = String(n.data?.label ?? n.id);
+              const { capacity } = getProfile(label);
+              return { label, latency: computeLatency(label, rps), overloaded: rps > capacity };
+            })
           );
         }}
         className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 rounded transition-colors"
@@ -106,9 +117,7 @@ export default function SimulationSidebar({ nodes, onSimulate }: Props) {
       {nodeRows.length > 0 && (
         <div className="flex flex-col gap-2">
           <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Node Breakdown</h3>
-          {nodeRows.map((row) => {
-            const overloaded = row.latency > 200;
-            return (
+          {nodeRows.map((row) => (
               <div
                 key={row.label}
                 className="flex items-center justify-between rounded-md border border-gray-200 bg-gray-50 px-3 py-2"
@@ -127,13 +136,12 @@ export default function SimulationSidebar({ nodes, onSimulate }: Props) {
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0 ml-2">
                   <span className="text-xs font-medium text-gray-800">{row.latency} ms</span>
-                  {overloaded && (
+                  {row.overloaded && (
                     <span className="text-xs font-semibold text-red-500 bg-red-50 border border-red-200 rounded px-1">overloaded</span>
                   )}
                 </div>
               </div>
-            );
-          })}
+            ))}
         </div>
       )}
     </aside>
