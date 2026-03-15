@@ -38,6 +38,17 @@ export default function DesignCanvas() {
     setNodes((nds) => [...nds, newNode]);
   }, [selectedType, setNodes]);
 
+  const applyLatencyStyles = useCallback((latencyById: Record<string, number>) => {
+    setNodes((nds) =>
+      nds.map((n) => {
+        const latency = latencyById[n.id];
+        if (latency === undefined) return n;
+        const color = latency < 100 ? '#22c55e' : latency <= 200 ? '#eab308' : '#ef4444';
+        return { ...n, style: { ...n.style, border: `2px solid ${color}` } };
+      })
+    );
+  }, [setNodes]);
+
   return (
     <div className="flex h-screen">
       {/* Canvas area */}
@@ -79,7 +90,7 @@ export default function DesignCanvas() {
       </div>
 
       {/* Right sidebar */}
-      <SimulationSidebar nodes={nodes} />
+      <SimulationSidebar nodes={nodes} onSimulate={applyLatencyStyles} />
     </div>
   );
 }
