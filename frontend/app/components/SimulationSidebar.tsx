@@ -10,9 +10,10 @@ interface SimulationResult {
 
 interface Props {
   nodes: Node[];
+  onSimulate: (latencyById: Record<string, number>) => void;
 }
 
-const BASE_LATENCY: Record<string, number> = {
+export const BASE_LATENCY: Record<string, number> = {
   'API Gateway': 50,
   'Service': 120,
   'Queue': 180,
@@ -20,8 +21,7 @@ const BASE_LATENCY: Record<string, number> = {
   'Cache': 80,
 };
 
-function nodeLatency(label: string): number {
-  // Label format: "<Type> <N>" — strip trailing " <N>" to get the type
+export function nodeLatency(label: string): number {
   const type = label.replace(/\s+\d+$/, '');
   return BASE_LATENCY[type] ?? 100;
 }
@@ -43,7 +43,7 @@ function runSimulation(nodes: Node[], rps: number): SimulationResult {
   return { bottleneck: bottleneckEntry.label, avgLatencyMs };
 }
 
-export default function SimulationSidebar({ nodes }: Props) {
+export default function SimulationSidebar({ nodes, onSimulate }: Props) {
   const [rps, setRps] = useState(1000);
   const [bottleneck, setBottleneck] = useState<string>('—');
   const [avgLatencyMs, setAvgLatencyMs] = useState<number | null>(null);
@@ -64,6 +64,10 @@ export default function SimulationSidebar({ nodes }: Props) {
 
       <button
         onClick={() => {
+          const latencyById = Object.fromEntries(
+            nodes.map((n) => [n.id, nodeLatency(String(n.data?.label ?? ''))])
+          );
+          onSimulate(latencyById);
           const r = runSimulation(nodes, rps);
           setBottleneck(r.bottleneck);
           setAvgLatencyMs(r.avgLatencyMs);
