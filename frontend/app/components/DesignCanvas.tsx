@@ -79,7 +79,7 @@ export default function DesignCanvas() {
       </div>
 
       {/* Right sidebar */}
-      <SimulationSidebar nodes={nodes} edges={edges} />
+      <SimulationSidebar nodes={nodes} />
     </div>
   );
 }

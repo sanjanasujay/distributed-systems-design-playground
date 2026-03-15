@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import type { Edge, Node } from 'reactflow';
+import type { Node } from 'reactflow';
 
 interface SimulationResult {
   bottleneck: string;
@@ -10,31 +10,40 @@ interface SimulationResult {
 
 interface Props {
   nodes: Node[];
-  edges: Edge[];
 }
 
-function runSimulation(nodes: Node[], edges: Edge[], rps: number): SimulationResult {
-  if (nodes.length === 0) {
-    return { bottleneck: 'N/A', avgLatencyMs: 0 };
-  }
+const BASE_LATENCY: Record<string, number> = {
+  'API Gateway': 50,
+  'Service': 120,
+  'Queue': 180,
+  'Database': 300,
+  'Cache': 80,
+};
 
-  // Count incoming edges per node to find the most-connected (bottleneck) node
-  const inDegree: Record<string, number> = Object.fromEntries(nodes.map((n) => [n.id, 0]));
-  for (const edge of edges) {
-    if (edge.target in inDegree) inDegree[edge.target]++;
-  }
-
-  const bottleneckId = Object.entries(inDegree).sort((a, b) => b[1] - a[1])[0][0];
-  const bottleneckNode = nodes.find((n) => n.id === bottleneckId);
-  const avgLatencyMs = Math.round(10 + (rps / 100) * 5 * (inDegree[bottleneckId] + 1));
-
-  return {
-    bottleneck: String(bottleneckNode?.data?.label ?? bottleneckId),
-    avgLatencyMs,
-  };
+function nodeLatency(label: string): number {
+  // Label format: "<Type> <N>" — strip trailing " <N>" to get the type
+  const type = label.replace(/\s+\d+$/, '');
+  return BASE_LATENCY[type] ?? 100;
 }
 
-export default function SimulationSidebar({ nodes, edges }: Props) {
+function runSimulation(nodes: Node[], rps: number): SimulationResult {
+  if (nodes.length === 0) return { bottleneck: 'N/A', avgLatencyMs: 0 };
+
+  const latencies = nodes.map((n) => ({
+    label: String(n.data?.label ?? n.id),
+    latency: nodeLatency(String(n.data?.label ?? '')),
+  }));
+
+  const bottleneckEntry = latencies.reduce((max, cur) => cur.latency > max.latency ? cur : max);
+
+  // Scale average latency with rps: every 1000 req/s adds 10% overhead
+  const baseAvg = latencies.reduce((sum, n) => sum + n.latency, 0) / latencies.length;
+  const avgLatencyMs = Math.round(baseAvg * (1 + (rps / 1000) * 0.1));
+
+  return { bottleneck: bottleneckEntry.label, avgLatencyMs };
+}
+
+export default function SimulationSidebar({ nodes }: Props) {
   const [rps, setRps] = useState(1000);
   const [bottleneck, setBottleneck] = useState<string>('—');
   const [avgLatencyMs, setAvgLatencyMs] = useState<number | null>(null);
@@ -55,7 +64,7 @@ export default function SimulationSidebar({ nodes, edges }: Props) {
 
       <button
         onClick={() => {
-          const r = runSimulation(nodes, edges, rps);
+          const r = runSimulation(nodes, rps);
           setBottleneck(r.bottleneck);
           setAvgLatencyMs(r.avgLatencyMs);
         }}
