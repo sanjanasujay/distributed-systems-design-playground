@@ -90,7 +90,7 @@ export default function DesignCanvas() {
       </div>
 
       {/* Right sidebar */}
-      <SimulationSidebar nodes={nodes} onSimulate={applyLatencyStyles} />
+      <SimulationSidebar nodes={nodes} edges={edges} onSimulate={applyLatencyStyles} />
     </div>
   );
 }

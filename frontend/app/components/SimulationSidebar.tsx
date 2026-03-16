@@ -1,71 +1,85 @@
 'use client';
 
 import { useState } from 'react';
-import type { Node } from 'reactflow';
+import type { Edge, Node } from 'reactflow';
 
-interface SimulationResult {
-  bottleneck: string;
-  avgLatencyMs: number;
+// ── Backend contract ──────────────────────────────────────────────────────────
+
+interface SimReqNode  { id: string; label: string; type: string; }
+interface SimReqEdge  { source: string; target: string; }
+interface SimRequest  { nodes: SimReqNode[]; edges: SimReqEdge[]; traffic: number; }
+
+interface NodeResult  { id: string; label: string; latency: number; overloaded: boolean; }
+interface SimResponse { bottleneck: string; averageLatency: number; nodes: NodeResult[]; }
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** "API Gateway" → "apiGateway", "Database" → "database", etc. */
+function toNodeType(label: string): string {
+  const type = label.replace(/\s+\d+$/, '');
+  const words = type.split(' ');
+  return words[0].toLowerCase() + words.slice(1).map((w) => w[0].toUpperCase() + w.slice(1)).join('');
 }
+
+function latencyColor(latency: number): string {
+  return latency < 100 ? 'bg-green-500' : latency <= 200 ? 'bg-yellow-400' : 'bg-red-500';
+}
+
+// ── Props ─────────────────────────────────────────────────────────────────────
 
 interface Props {
   nodes: Node[];
+  edges: Edge[];
   onSimulate: (latencyById: Record<string, number>) => void;
 }
 
-interface NodeProfile {
-  base: number;
-  capacity: number;
-}
+// ── Component ─────────────────────────────────────────────────────────────────
 
-const NODE_PROFILE: Record<string, NodeProfile> = {
-  'API Gateway': { base: 20,  capacity: 1500 },
-  'Service':     { base: 40,  capacity: 1000 },
-  'Queue':       { base: 70,  capacity: 800  },
-  'Database':    { base: 100, capacity: 600  },
-  'Cache':       { base: 15,  capacity: 2000 },
-};
+export default function SimulationSidebar({ nodes, edges, onSimulate }: Props) {
+  const [rps, setRps]           = useState(1000);
+  const [result, setResult]     = useState<SimResponse | null>(null);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState<string | null>(null);
 
-const DEFAULT_PROFILE: NodeProfile = { base: 40, capacity: 1000 };
+  async function handleSimulate() {
+    if (nodes.length === 0) return;
 
-function getProfile(label: string): NodeProfile {
-  const type = label.replace(/\s+\d+$/, '');
-  return NODE_PROFILE[type] ?? DEFAULT_PROFILE;
-}
+    const body: SimRequest = {
+      traffic: rps,
+      nodes: nodes.map((n) => ({
+        id:    n.id,
+        label: String(n.data?.label ?? n.id),
+        type:  toNodeType(String(n.data?.label ?? '')),
+      })),
+      edges: edges.map((e) => ({ source: e.source, target: e.target })),
+    };
 
-export function computeLatency(label: string, rps: number): number {
-  const { base, capacity } = getProfile(label);
-  return Math.round(base + (rps / capacity) * 100);
-}
+    setLoading(true);
+    setError(null);
 
-function runSimulation(nodes: Node[], rps: number): SimulationResult {
-  if (nodes.length === 0) return { bottleneck: 'N/A', avgLatencyMs: 0 };
+    try {
+      const res = await fetch('http://localhost:8080/simulate', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(body),
+      });
 
-  const rows = nodes.map((n) => ({
-    label: String(n.data?.label ?? n.id),
-    latency: computeLatency(String(n.data?.label ?? ''), rps),
-  }));
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
 
-  const bottleneckEntry = rows.reduce((max, cur) => cur.latency > max.latency ? cur : max);
-  const avgLatencyMs = Math.round(rows.reduce((sum, r) => sum + r.latency, 0) / rows.length);
-
-  return { bottleneck: bottleneckEntry.label, avgLatencyMs };
-}
-
-interface NodeRow {
-  label: string;
-  latency: number;
-  overloaded: boolean;
-}
-
-export default function SimulationSidebar({ nodes, onSimulate }: Props) {
-  const [rps, setRps] = useState(1000);
-  const [bottleneck, setBottleneck] = useState<string>('—');
-  const [avgLatencyMs, setAvgLatencyMs] = useState<number | null>(null);
-  const [nodeRows, setNodeRows] = useState<NodeRow[]>([]);
+      const data: SimResponse = await res.json();
+      setResult(data);
+      onSimulate(Object.fromEntries(data.nodes.map((n) => [n.id, n.latency])));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Request failed');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <aside className="w-72 shrink-0 border-l bg-white flex flex-col gap-6 p-5 overflow-y-auto">
+
+      {/* Traffic input */}
       <div>
         <h2 className="text-sm font-semibold text-gray-700 mb-3">Simulation</h2>
         <label className="block text-xs text-gray-500 mb-1">Traffic (req/s)</label>
@@ -78,70 +92,58 @@ export default function SimulationSidebar({ nodes, onSimulate }: Props) {
         />
       </div>
 
+      {/* Simulate button */}
       <button
-        onClick={() => {
-          const latencyById = Object.fromEntries(
-            nodes.map((n) => [n.id, computeLatency(String(n.data?.label ?? ''), rps)])
-          );
-          onSimulate(latencyById);
-          const r = runSimulation(nodes, rps);
-          setBottleneck(r.bottleneck);
-          setAvgLatencyMs(r.avgLatencyMs);
-          setNodeRows(
-            nodes.map((n) => {
-              const label = String(n.data?.label ?? n.id);
-              const { capacity } = getProfile(label);
-              return { label, latency: computeLatency(label, rps), overloaded: rps > capacity };
-            })
-          );
-        }}
-        className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 rounded transition-colors"
+        onClick={handleSimulate}
+        disabled={loading || nodes.length === 0}
+        className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium py-2 rounded transition-colors"
       >
-        Simulate
+        {loading ? 'Simulating…' : 'Simulate'}
       </button>
 
+      {/* Error */}
+      {error && (
+        <p className="text-xs text-red-500 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>
+      )}
+
+      {/* Summary */}
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 flex flex-col gap-3">
         <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Results</h3>
         <div>
           <p className="text-xs text-gray-500">Bottleneck Node</p>
-          <p className="text-sm font-semibold text-red-600 mt-0.5">{bottleneck}</p>
+          <p className="text-sm font-semibold text-red-600 mt-0.5">{result?.bottleneck ?? '—'}</p>
         </div>
         <div>
           <p className="text-xs text-gray-500">Avg Latency</p>
           <p className="text-sm font-semibold text-gray-800 mt-0.5">
-            {avgLatencyMs !== null ? `${avgLatencyMs} ms` : '—'}
+            {result ? `${Math.round(result.averageLatency)} ms` : '—'}
           </p>
         </div>
       </div>
 
-      {nodeRows.length > 0 && (
+      {/* Node breakdown */}
+      {result && result.nodes.length > 0 && (
         <div className="flex flex-col gap-2">
           <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Node Breakdown</h3>
-          {nodeRows.map((row) => (
-              <div
-                key={row.label}
-                className="flex items-center justify-between rounded-md border border-gray-200 bg-gray-50 px-3 py-2"
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <span
-                    className={`inline-block w-2 h-2 rounded-full shrink-0 ${
-                      row.latency < 100
-                        ? 'bg-green-500'
-                        : row.latency <= 200
-                        ? 'bg-yellow-400'
-                        : 'bg-red-500'
-                    }`}
-                  />
-                  <span className="text-xs text-gray-700 truncate">{row.label}</span>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                  <span className="text-xs font-medium text-gray-800">{row.latency} ms</span>
-                  {row.overloaded && (
-                    <span className="text-xs font-semibold text-red-500 bg-red-50 border border-red-200 rounded px-1">overloaded</span>
-                  )}
-                </div>
+          {result.nodes.map((row) => (
+            <div
+              key={row.id}
+              className="flex items-center justify-between rounded-md border border-gray-200 bg-gray-50 px-3 py-2"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${latencyColor(row.latency)}`} />
+                <span className="text-xs text-gray-700 truncate">{row.label}</span>
               </div>
-            ))}
+              <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                <span className="text-xs font-medium text-gray-800">{Math.round(row.latency)} ms</span>
+                {row.overloaded && (
+                  <span className="text-xs font-semibold text-red-500 bg-red-50 border border-red-200 rounded px-1">
+                    overloaded
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </aside>
