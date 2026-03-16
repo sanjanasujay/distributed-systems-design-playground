@@ -14,13 +14,6 @@ interface SimResponse { bottleneck: string; averageLatency: number; nodes: NodeR
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** "API Gateway" → "apiGateway", "Database" → "database", etc. */
-function toNodeType(label: string): string {
-  const type = label.replace(/\s+\d+$/, '');
-  const words = type.split(' ');
-  return words[0].toLowerCase() + words.slice(1).map((w) => w[0].toUpperCase() + w.slice(1)).join('');
-}
-
 function latencyColor(latency: number): string {
   return latency < 100 ? 'bg-green-500' : latency <= 200 ? 'bg-yellow-400' : 'bg-red-500';
 }
@@ -49,7 +42,7 @@ export default function SimulationSidebar({ nodes, edges, onSimulate }: Props) {
       nodes: nodes.map((n) => ({
         id:    n.id,
         label: String(n.data?.label ?? n.id),
-        type:  toNodeType(String(n.data?.label ?? '')),
+        type:  String(n.data?.type ?? ''),
       })),
       edges: edges.map((e) => ({ source: e.source, target: e.target })),
     };

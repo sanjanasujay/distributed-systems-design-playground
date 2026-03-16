@@ -14,14 +14,20 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
-const SERVICE_TYPES = ['API Gateway', 'Database', 'Cache', 'Queue', 'Service'];
+const SERVICE_TYPES: { label: string; type: string }[] = [
+  { label: 'API Gateway', type: 'apiGateway' },
+  { label: 'Service',     type: 'service'    },
+  { label: 'Database',    type: 'database'   },
+  { label: 'Queue',       type: 'queue'      },
+  { label: 'Cache',       type: 'cache'      },
+];
 
 let nodeId = 1;
 
 export default function DesignCanvas() {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const [selectedType, setSelectedType] = useState(SERVICE_TYPES[0]);
+  const [selectedType, setSelectedType] = useState(SERVICE_TYPES[0].label);
 
   const onConnect = useCallback(
     (connection: Connection) => setEdges((eds) => addEdge(connection, eds)),
@@ -30,10 +36,11 @@ export default function DesignCanvas() {
 
   const addNode = useCallback(() => {
     const id = `node-${nodeId++}`;
+    const entry = SERVICE_TYPES.find((s) => s.label === selectedType) ?? SERVICE_TYPES[0];
     const newNode: Node = {
       id,
       position: { x: Math.random() * 400 + 50, y: Math.random() * 300 + 50 },
-      data: { label: `${selectedType} ${nodeId - 1}` },
+      data: { label: `${entry.label} ${nodeId - 1}`, type: entry.type },
     };
     setNodes((nds) => [...nds, newNode]);
   }, [selectedType, setNodes]);
@@ -60,7 +67,7 @@ export default function DesignCanvas() {
             className="border rounded px-2 py-1 text-sm"
           >
             {SERVICE_TYPES.map((t) => (
-              <option key={t}>{t}</option>
+              <option key={t.label} value={t.label}>{t.label}</option>
             ))}
           </select>
           <button
