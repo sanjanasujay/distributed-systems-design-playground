@@ -1,0 +1,15 @@
+POST http://localhost:8080/simulate
+Content-Type: application/json
+
+{
+  "nodes": [
+    {"id":"1","label":"API Gateway","type":"apiGateway"},
+    {"id":"2","label":"Service","type":"service"},
+    {"id":"3","label":"Database","type":"database"}
+  ],
+  "edges": [
+    {"source":"1","target":"2"},
+    {"source":"2","target":"3"}
+  ],
+  "traffic": 1000
+}
