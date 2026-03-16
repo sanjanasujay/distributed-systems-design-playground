@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from 'react';
 import SimulationSidebar from './SimulationSidebar';
+import ServiceNode from './ServiceNode';
 import ReactFlow, {
   addEdge,
   Background,
@@ -22,6 +23,8 @@ const SERVICE_TYPES: { label: string; type: string }[] = [
   { label: 'Cache',       type: 'cache'      },
 ];
 
+const nodeTypes = { serviceNode: ServiceNode };
+
 let nodeId = 1;
 
 export default function DesignCanvas() {
@@ -39,6 +42,7 @@ export default function DesignCanvas() {
     const entry = SERVICE_TYPES.find((s) => s.label === selectedType) ?? SERVICE_TYPES[0];
     const newNode: Node = {
       id,
+      type: 'serviceNode',
       position: { x: Math.random() * 400 + 50, y: Math.random() * 300 + 50 },
       data: { label: `${entry.label} ${nodeId - 1}`, type: entry.type },
     };
@@ -50,8 +54,7 @@ export default function DesignCanvas() {
       nds.map((n) => {
         const latency = latencyById[n.id];
         if (latency === undefined) return n;
-        const color = latency < 100 ? '#22c55e' : latency <= 200 ? '#eab308' : '#ef4444';
-        return { ...n, style: { ...n.style, border: `2px solid ${color}` } };
+        return { ...n, data: { ...n.data, latency } };
       })
     );
   }, [setNodes]);
@@ -84,6 +87,7 @@ export default function DesignCanvas() {
           <ReactFlow
             nodes={nodes}
             edges={edges}
+            nodeTypes={nodeTypes}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}

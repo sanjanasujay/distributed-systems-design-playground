@@ -42,7 +42,7 @@ export default function SimulationSidebar({ nodes, edges, onSimulate }: Props) {
       nodes: nodes.map((n) => ({
         id:    n.id,
         label: String(n.data?.label ?? n.id),
-        type:  String(n.data?.type ?? ''),
+        type:  String(n.data?.type ?? 'service'),
       })),
       edges: edges.map((e) => ({ source: e.source, target: e.target })),
     };
