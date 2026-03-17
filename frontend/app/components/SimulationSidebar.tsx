@@ -23,7 +23,7 @@ function latencyColor(latency: number): string {
 interface Props {
   nodes: Node[];
   edges: Edge[];
-  onSimulate: (latencyById: Record<string, number>) => void;
+  onSimulate: (resultsById: Record<string, { latency: number; overloaded: boolean }>) => void;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -61,7 +61,7 @@ export default function SimulationSidebar({ nodes, edges, onSimulate }: Props) {
 
       const data: SimResponse = await res.json();
       setResult(data);
-      onSimulate(Object.fromEntries(data.nodes.map((n) => [n.id, n.latency])));
+      onSimulate(Object.fromEntries(data.nodes.map((n) => [n.id, { latency: n.latency, overloaded: n.overloaded }])));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Request failed');
     } finally {

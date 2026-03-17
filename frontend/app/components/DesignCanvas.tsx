@@ -49,12 +49,12 @@ export default function DesignCanvas() {
     setNodes((nds) => [...nds, newNode]);
   }, [selectedType, setNodes]);
 
-  const applyLatencyStyles = useCallback((latencyById: Record<string, number>) => {
+  const applyLatencyStyles = useCallback((resultsById: Record<string, { latency: number; overloaded: boolean }>) => {
     setNodes((nds) =>
       nds.map((n) => {
-        const latency = latencyById[n.id];
-        if (latency === undefined) return n;
-        return { ...n, data: { ...n.data, latency } };
+        const result = resultsById[n.id];
+        if (!result) return n;
+        return { ...n, data: { ...n.data, latency: result.latency, overloaded: result.overloaded } };
       })
     );
   }, [setNodes]);
