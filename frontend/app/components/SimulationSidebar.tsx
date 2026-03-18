@@ -7,7 +7,7 @@ import type { Edge, Node } from 'reactflow';
 
 interface SimReqNode  { id: string; label: string; type: string; }
 interface SimReqEdge  { source: string; target: string; }
-interface SimRequest  { nodes: SimReqNode[]; edges: SimReqEdge[]; traffic: number; }
+interface SimRequest  { nodes: SimReqNode[]; edges: SimReqEdge[]; traffic: number; failureMode: string; }
 
 interface NodeResult  { id: string; label: string; latency: number; overloaded: boolean; }
 interface SimResponse { bottleneck: string; averageLatency: number; nodes: NodeResult[]; }
@@ -17,6 +17,15 @@ interface SimResponse { bottleneck: string; averageLatency: number; nodes: NodeR
 function latencyColor(latency: number): string {
   return latency < 100 ? 'bg-green-500' : latency <= 200 ? 'bg-yellow-400' : 'bg-red-500';
 }
+
+type FailureMode = 'none' | 'databaseFailure' | 'serviceCrash' | 'networkDelay';
+
+const FAILURE_MODES: { value: FailureMode; label: string }[] = [
+  { value: 'none',            label: 'None'            },
+  { value: 'databaseFailure', label: 'Database Failure' },
+  { value: 'serviceCrash',    label: 'Service Crash'   },
+  { value: 'networkDelay',    label: 'Network Delay'   },
+];
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -29,16 +38,18 @@ interface Props {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function SimulationSidebar({ nodes, edges, onSimulate }: Props) {
-  const [rps, setRps]           = useState(1000);
-  const [result, setResult]     = useState<SimResponse | null>(null);
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState<string | null>(null);
+  const [rps, setRps]               = useState(1000);
+  const [failureMode, setFailureMode] = useState<FailureMode>('none');
+  const [result, setResult]           = useState<SimResponse | null>(null);
+  const [loading, setLoading]         = useState(false);
+  const [error, setError]             = useState<string | null>(null);
 
   async function handleSimulate() {
     if (nodes.length === 0) return;
 
     const body: SimRequest = {
       traffic: rps,
+      failureMode,
       nodes: nodes.map((n) => ({
         id:    n.id,
         label: String(n.data?.label ?? n.id),
@@ -83,6 +94,17 @@ export default function SimulationSidebar({ nodes, edges, onSimulate }: Props) {
           onChange={(e) => setRps(Math.max(1, Number(e.target.value)))}
           className="w-full border rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
+
+        <label className="block text-xs text-gray-500 mt-3 mb-1">Failure Mode</label>
+        <select
+          value={failureMode}
+          onChange={(e) => setFailureMode(e.target.value as FailureMode)}
+          className="w-full border rounded px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          {FAILURE_MODES.map((m) => (
+            <option key={m.value} value={m.value}>{m.label}</option>
+          ))}
+        </select>
       </div>
 
       {/* Simulate button */}
