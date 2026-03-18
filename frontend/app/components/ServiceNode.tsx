@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef, useState } from 'react';
 import { Handle, Position } from 'reactflow';
 import type { NodeProps } from 'reactflow';
 
@@ -26,10 +27,44 @@ function badgeClass(latency: number, overloaded: boolean, impacted: boolean): st
   return 'bg-red-100 text-red-700';
 }
 
+const DURATION = 600; // ms
+
+function useAnimatedValue(target: number | undefined): number | undefined {
+  const [display, setDisplay] = useState<number | undefined>(target);
+  const rafRef  = useRef<number | null>(null);
+  const fromRef = useRef<number>(0);
+  const startRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (target === undefined) { setDisplay(undefined); return; }
+
+    fromRef.current  = display ?? target;
+    startRef.current = performance.now();
+
+    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+
+    function tick(now: number) {
+      const progress = Math.min((now - startRef.current) / DURATION, 1);
+      // ease-out cubic
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplay(Math.round(fromRef.current + (target! - fromRef.current) * eased));
+      if (progress < 1) rafRef.current = requestAnimationFrame(tick);
+    }
+
+    rafRef.current = requestAnimationFrame(tick);
+    return () => { if (rafRef.current !== null) cancelAnimationFrame(rafRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target]);
+
+  return display;
+}
+
 export default function ServiceNode({ data }: NodeProps<ServiceNodeData>) {
-  const hasLatency = data.latency !== undefined;
-  const overloaded = !!data.overloaded;
-  const impacted   = !!data.impacted && !overloaded;
+  const hasLatency  = data.latency !== undefined;
+  const overloaded  = !!data.overloaded;
+  const impacted    = !!data.impacted && !overloaded;
+  const displayed   = useAnimatedValue(data.latency);
+
   const border = hasLatency
     ? `${overloaded ? '3px' : '2px'} solid ${borderColor(data.latency!, overloaded, impacted)}`
     : '1px solid #d1d5db';
@@ -37,16 +72,20 @@ export default function ServiceNode({ data }: NodeProps<ServiceNodeData>) {
 
   return (
     <div
-      style={{ border, background: bg }}
+      style={{
+        border,
+        background: bg,
+        transition: 'border 0.6s ease, background-color 0.6s ease',
+      }}
       className="rounded-md px-3 py-2 shadow-sm min-w-[120px] text-center"
     >
       <Handle type="target" position={Position.Top} />
 
       <p className="text-xs font-medium text-gray-800 leading-tight">{data.label}</p>
 
-      {hasLatency && (
-        <span className={`mt-1 inline-block text-[10px] font-semibold rounded px-1.5 py-0.5 ${badgeClass(data.latency!, overloaded, impacted)}`}>
-          {Math.round(data.latency!)} ms{overloaded ? ' ⚠' : impacted ? ' ↗' : ''}
+      {hasLatency && displayed !== undefined && (
+        <span className={`mt-1 inline-block text-[10px] font-semibold rounded px-1.5 py-0.5 transition-colors duration-500 ${badgeClass(data.latency!, overloaded, impacted)}`}>
+          {displayed} ms{overloaded ? ' ⚠' : impacted ? ' ↗' : ''}
         </span>
       )}
 
