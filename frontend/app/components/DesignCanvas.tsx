@@ -50,14 +50,34 @@ export default function DesignCanvas() {
   }, [selectedType, setNodes]);
 
   const applyLatencyStyles = useCallback((resultsById: Record<string, { latency: number; overloaded: boolean }>) => {
-    setNodes((nds) =>
-      nds.map((n) => {
+    setNodes((nds) => {
+      // Step 1: apply latency + overloaded from backend results
+      const updated = nds.map((n) => {
         const result = resultsById[n.id];
-        if (!result) return n;
-        return { ...n, data: { ...n.data, latency: result.latency, overloaded: result.overloaded } };
-      })
-    );
-  }, [setNodes]);
+        if (!result) return { ...n, data: { ...n.data, latency: undefined, overloaded: false, impacted: false } };
+        return { ...n, data: { ...n.data, latency: result.latency, overloaded: result.overloaded, impacted: false } };
+      });
+
+      // Step 2: BFS from every overloaded node to find downstream impacted nodes
+      const overloadedIds = new Set(updated.filter((n) => n.data.overloaded).map((n) => n.id));
+      const impactedIds   = new Set<string>();
+
+      const queue = [...overloadedIds];
+      while (queue.length > 0) {
+        const current = queue.shift()!;
+        edges.forEach((e) => {
+          if (e.source === current && !overloadedIds.has(e.target) && !impactedIds.has(e.target)) {
+            impactedIds.add(e.target);
+            queue.push(e.target);
+          }
+        });
+      }
+
+      return updated.map((n) =>
+        impactedIds.has(n.id) ? { ...n, data: { ...n.data, impacted: true } } : n
+      );
+    });
+  }, [setNodes, edges]);
 
   return (
     <div className="flex h-screen">
