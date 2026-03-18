@@ -50,6 +50,22 @@ export default function SimulationSidebar({ nodes, edges, onSimulate }: Props) {
   const [loading, setLoading]         = useState(false);
   const [error, setError]             = useState<string | null>(null);
 
+  function exportArchitecture() {
+    const payload = {
+      nodes: nodes.map((n) => ({
+        id:    n.id,
+        label: String(n.data?.label ?? n.id),
+        type:  String(n.data?.type  ?? ''),
+      })),
+      edges: edges.map((e) => ({ source: e.source, target: e.target })),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = Object.assign(document.createElement('a'), { href: url, download: 'architecture.json' });
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   async function handleSimulate() {
     if (nodes.length === 0) return;
 
@@ -193,6 +209,14 @@ export default function SimulationSidebar({ nodes, edges, onSimulate }: Props) {
           ))}
         </div>
       )}
+      {/* Export */}
+      <button
+        onClick={exportArchitecture}
+        disabled={nodes.length === 0}
+        className="w-full border border-gray-300 hover:border-gray-400 hover:bg-gray-50 disabled:opacity-50 text-gray-700 text-sm font-medium py-2 rounded transition-colors"
+      >
+        Export Architecture
+      </button>
     </aside>
   );
 }
