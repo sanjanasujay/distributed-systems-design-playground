@@ -18,6 +18,12 @@ function latencyColor(latency: number): string {
   return latency < 100 ? 'bg-green-500' : latency <= 200 ? 'bg-yellow-400' : 'bg-red-500';
 }
 
+function systemHealth(total: number, overloaded: number): { label: string; className: string } {
+  if (overloaded === 0)            return { label: 'Healthy',  className: 'text-green-700 bg-green-50 border-green-200' };
+  if (overloaded > total / 2)     return { label: 'Critical',  className: 'text-red-700   bg-red-50   border-red-200'   };
+  return                                 { label: 'Degraded',  className: 'text-yellow-700 bg-yellow-50 border-yellow-200' };
+}
+
 type FailureMode = 'none' | 'databaseFailure' | 'serviceCrash' | 'networkDelay';
 
 const FAILURE_MODES: { value: FailureMode; label: string }[] = [
@@ -135,6 +141,32 @@ export default function SimulationSidebar({ nodes, edges, onSimulate }: Props) {
           </p>
         </div>
       </div>
+
+      {/* System Metrics */}
+      {result && (() => {
+        const total      = result.nodes.length;
+        const overloaded = result.nodes.filter((n) => n.overloaded).length;
+        const health     = systemHealth(total, overloaded);
+        return (
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 flex flex-col gap-3">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">System Metrics</h3>
+            <div className="flex justify-between items-center">
+              <p className="text-xs text-gray-500">Total Nodes</p>
+              <p className="text-sm font-semibold text-gray-800">{total}</p>
+            </div>
+            <div className="flex justify-between items-center">
+              <p className="text-xs text-gray-500">Overloaded Nodes</p>
+              <p className="text-sm font-semibold text-red-600">{overloaded}</p>
+            </div>
+            <div className="flex justify-between items-center">
+              <p className="text-xs text-gray-500">System Health</p>
+              <span className={`text-xs font-semibold border rounded px-2 py-0.5 ${health.className}`}>
+                {health.label}
+              </span>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Node breakdown */}
       {result && result.nodes.length > 0 && (
