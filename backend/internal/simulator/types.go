@@ -12,9 +12,10 @@ type Edge struct {
 }
 
 type SimulationRequest struct {
-	Nodes   []Node `json:"nodes"`
-	Edges   []Edge `json:"edges"`
-	Traffic int    `json:"traffic"`
+	Nodes       []Node `json:"nodes"`
+	Edges       []Edge `json:"edges"`
+	Traffic     int    `json:"traffic"`
+	FailureMode string `json:"failureMode"`
 }
 
 type NodeResult struct {

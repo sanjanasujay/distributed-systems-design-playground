@@ -1,14 +1,12 @@
 package simulator
 
 func Simulate(req SimulationRequest) SimulationResponse {
-
 	var results []NodeResult
 	var totalLatency float64
 	var bottleneck string
 	var maxLatency float64
 
 	for _, node := range req.Nodes {
-
 		baseLatency := 50.0
 		capacity := 1000.0
 
@@ -32,6 +30,21 @@ func Simulate(req SimulationRequest) SimulationResponse {
 
 		latency := baseLatency + (float64(req.Traffic)/capacity)*100
 		overloaded := float64(req.Traffic) > capacity
+
+		switch req.FailureMode {
+		case "databaseFailure":
+			if node.Type == "database" {
+				latency = 1000 + baseLatency
+				overloaded = true
+			}
+		case "serviceCrash":
+			if node.Type == "service" {
+				latency *= 3
+				overloaded = true
+			}
+		case "networkDelay":
+			latency += 100
+		}
 
 		result := NodeResult{
 			ID:         node.ID,
